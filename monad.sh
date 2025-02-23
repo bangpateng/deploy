@@ -86,7 +86,7 @@ import "@nomicfoundation/hardhat-toolbox-viem";
 import { vars } from "hardhat/config";
 
 const config: HardhatUserConfig = {
-  solidity: "0.8.27",
+  solidity: "0.8.19",
   networks: {
     monadTestnet: {
       url: "https://testnet-rpc.monad.xyz/",
@@ -115,28 +115,95 @@ EOL
 
     # Buat direktori contracts dan file smart contract
     mkdir -p contracts
-    cat > contracts/GMonad.sol << 'EOL'
+    cat > contracts/Bangpateng.sol << 'EOL'
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.27;
+pragma solidity ^0.8.19;
 
-contract GMonad {
-    function sayGmonad() public pure returns (string memory) {
-        return "gmonad";
+contract Bangpateng {
+    address public owner;
+    uint256 public faucetAmount = 0.01 ether;
+    uint256 public cooldownTime = 24 hours;
+    
+    mapping(address => uint256) public lastClaimTime;
+    
+    event FaucetClaimed(address indexed recipient, uint256 amount, uint256 timestamp);
+    event FaucetReplenished(uint256 amount, uint256 timestamp);
+    event AmountChanged(uint256 newAmount);
+    event CooldownChanged(uint256 newCooldown);
+    
+    constructor() {
+        owner = msg.sender;
+    }
+    
+    modifier onlyOwner() {
+        require(msg.sender == owner, "Only owner can call this function");
+        _;
+    }
+    
+    receive() external payable {
+        emit FaucetReplenished(msg.value, block.timestamp);
+    }
+    
+    function claimFaucet() external {
+        require(
+            block.timestamp >= lastClaimTime[msg.sender] + cooldownTime,
+            "Please wait for cooldown period"
+        );
+        require(
+            address(this).balance >= faucetAmount,
+            "Insufficient faucet balance"
+        );
+        
+        lastClaimTime[msg.sender] = block.timestamp;
+        
+        (bool success, ) = payable(msg.sender).call{value: faucetAmount}("");
+        require(success, "Failed to send MONAD");
+        
+        emit FaucetClaimed(msg.sender, faucetAmount, block.timestamp);
+    }
+    
+    function checkRemainingTime(address _user) external view returns (uint256) {
+        if (block.timestamp >= lastClaimTime[_user] + cooldownTime) {
+            return 0;
+        }
+        return (lastClaimTime[_user] + cooldownTime) - block.timestamp;
+    }
+    
+    function setFaucetAmount(uint256 _newAmount) external onlyOwner {
+        faucetAmount = _newAmount;
+        emit AmountChanged(_newAmount);
+    }
+    
+    function setCooldownTime(uint256 _newCooldown) external onlyOwner {
+        cooldownTime = _newCooldown;
+        emit CooldownChanged(_newCooldown);
+    }
+    
+    function withdrawAll() external onlyOwner {
+        uint256 balance = address(this).balance;
+        require(balance > 0, "No balance to withdraw");
+        
+        (bool success, ) = payable(owner).call{value: balance}("");
+        require(success, "Failed to withdraw");
+    }
+    
+    function getContractBalance() external view returns (uint256) {
+        return address(this).balance;
     }
 }
 EOL
 
     # Buat direktori ignition dan modul deployment
     mkdir -p ignition/modules
-    cat > ignition/modules/GMonad.ts << 'EOL'
+    cat > ignition/modules/Bangpateng.ts << 'EOL'
 import { buildModule } from "@nomicfoundation/hardhat-ignition/modules";
 
-const GMonadModule = buildModule("GMonadModule", (m) => {
-    const gmonad = m.contract("GMonad");
-    return { gmonad };
+const BangpatengModule = buildModule("BangpatengModule", (m) => {
+    const bangpateng = m.contract("Bangpateng");
+    return { bangpateng };
 });
 
-export default GMonadModule;
+export default BangpatengModule;
 EOL
 
     # Set private key
@@ -144,7 +211,7 @@ EOL
     read -r private_key
     npx hardhat vars set PRIVATE_KEY "$private_key"
 
-    # Compile kontrak
+    # Compile kontrak 
     echo "Kompilasi kontrak..."
     npx hardhat compile
 
@@ -166,7 +233,7 @@ deploy_with_retry() {
         echo "Percobaan deployment ke-$attempt dari $max_retries..."
         
         # Capture output deployment ke file
-        if npx hardhat ignition deploy ./ignition/modules/GMonad.ts --network monadTestnet | tee "$output_file"; then
+        if npx hardhat ignition deploy ./ignition/modules/Bangpateng.ts --network monadTestnet | tee "$output_file"; then
             echo "Deployment berhasil!"
             # Tampilkan alamat dan link kontrak
             get_contract_address
@@ -234,7 +301,7 @@ import type { HardhatUserConfig } from "hardhat/config";
 import "@nomicfoundation/hardhat-toolbox-viem";
 
 const config: HardhatUserConfig = {
-    solidity: "0.8.27",
+    solidity: "0.8.19",
     networks: {
         monadTestnet: {
             url: "https://testnet-rpc.monad.xyz",
@@ -260,11 +327,78 @@ EOL
     # Create the contract file with exact same code as deployed
     cat > contracts/Contract.sol << 'EOL'
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.27;
+pragma solidity ^0.8.19;
 
-contract GMonad {
-    function sayGmonad() public pure returns (string memory) {
-        return "gmonad";
+contract Bangpateng {
+    address public owner;
+    uint256 public faucetAmount = 0.1 ether;
+    uint256 public cooldownTime = 24 hours;
+    
+    mapping(address => uint256) public lastClaimTime;
+    
+    event FaucetClaimed(address indexed recipient, uint256 amount, uint256 timestamp);
+    event FaucetReplenished(uint256 amount, uint256 timestamp);
+    event AmountChanged(uint256 newAmount);
+    event CooldownChanged(uint256 newCooldown);
+    
+    constructor() {
+        owner = msg.sender;
+    }
+    
+    modifier onlyOwner() {
+        require(msg.sender == owner, "Only owner can call this function");
+        _;
+    }
+    
+    receive() external payable {
+        emit FaucetReplenished(msg.value, block.timestamp);
+    }
+    
+    function claimFaucet() external {
+        require(
+            block.timestamp >= lastClaimTime[msg.sender] + cooldownTime,
+            "Please wait for cooldown period"
+        );
+        require(
+            address(this).balance >= faucetAmount,
+            "Insufficient faucet balance"
+        );
+        
+        lastClaimTime[msg.sender] = block.timestamp;
+        
+        (bool success, ) = payable(msg.sender).call{value: faucetAmount}("");
+        require(success, "Failed to send MONAD");
+        
+        emit FaucetClaimed(msg.sender, faucetAmount, block.timestamp);
+    }
+    
+    function checkRemainingTime(address _user) external view returns (uint256) {
+        if (block.timestamp >= lastClaimTime[_user] + cooldownTime) {
+            return 0;
+        }
+        return (lastClaimTime[_user] + cooldownTime) - block.timestamp;
+    }
+    
+    function setFaucetAmount(uint256 _newAmount) external onlyOwner {
+        faucetAmount = _newAmount;
+        emit AmountChanged(_newAmount);
+    }
+    
+    function setCooldownTime(uint256 _newCooldown) external onlyOwner {
+        cooldownTime = _newCooldown;
+        emit CooldownChanged(_newCooldown);
+    }
+    
+    function withdrawAll() external onlyOwner {
+        uint256 balance = address(this).balance;
+        require(balance > 0, "No balance to withdraw");
+        
+        (bool success, ) = payable(owner).call{value: balance}("");
+        require(success, "Failed to withdraw");
+    }
+    
+    function getContractBalance() external view returns (uint256) {
+        return address(this).balance;
     }
 }
 EOL
@@ -294,87 +428,4 @@ uninstall_monad() {
     # Setup NVM environment jika belum
     export NVM_DIR="$HOME/.nvm"
     [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-    [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
-
-    # Hapus variabel Hardhat
-    if [ -f "/root/.config/hardhat-nodejs/vars.json" ]; then
-        echo "Menghapus variabel Hardhat..."
-        rm -rf /root/.config/hardhat-nodejs
-    fi
-
-    # Hapus direktori proyek monad
-    if [ -d "monad" ]; then
-        echo "Menghapus direktori monad..."
-        rm -rf monad
-    fi
-
-    if [ -d "monad_verify" ]; then
-        echo "Menghapus direktori monad_verify..."
-        rm -rf monad_verify
-    fi
-
-    # Hapus Node.js versi yang diinstal
-    echo "Menghapus Node.js versi 20.11.1..."
-    if command -v nvm &> /dev/null; then
-        nvm deactivate
-        nvm uninstall 20.11.1
-    fi
-
-    # Hapus NVM
-    echo "Menghapus NVM..."
-    rm -rf "$HOME/.nvm"
-
-    # Hapus referensi NVM dari bashrc
-    echo "Membersihkan konfigurasi NVM dari bashrc..."
-    sed -i '/NVM_DIR/d' ~/.bashrc
-    sed -i '/nvm.sh/d' ~/.bashrc
-    sed -i '/nvm_find_nvmrc/d' ~/.bashrc
-
-    # Hapus cache npm
-    echo "Membersihkan cache npm..."
-    if command -v npm &> /dev/null; then
-        npm cache clean --force
-    fi
-
-    # Hapus dependencies global
-    echo "Menghapus dependencies global..."
-    if command -v npm &> /dev/null; then
-        npm uninstall -g hardhat typescript ts-node
-    fi
-
-    echo "Uninstall selesai!"
-    echo "Silakan restart terminal Anda untuk menerapkan semua perubahan."
-}
-
-# Menu utama
-clear
-show_logo
-echo "================================="
-echo "    Monad Contract Tools Menu    "
-echo "================================="
-echo "1. Deploy Smart Contract"
-echo "2. Verify Contract"
-echo "3. Uninstall Monad"
-echo "4. Exit"
-echo "================================="
-echo "Choose option (1-4):"
-read -r choice
-
-case $choice in
-    1)
-        deploy_sc
-        ;;
-    2)
-        verify_contract
-        ;;
-    3)
-        uninstall_monad
-        ;;
-    4)
-        echo "Exiting program..."
-        exit 0
-        ;;
-    *)
-        echo "Invalid choice!"
-        ;;
-esac
+    [ -s "$NVM_DIR/bash_completion" ] && \. "$
